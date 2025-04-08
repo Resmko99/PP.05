@@ -293,7 +293,7 @@ class MainWindow(QWidget):
         super().__init__()
         self.user_id = user_id
         self.position_id = position_id
-        self.setWindowTitle("Рабочий стол HOTEL CompanyName")
+        self.setWindowTitle("Главное Отеля Хазбра")
         self.resize(1200, 800)
         self.setMinimumSize(800, 600)
         self.center()
@@ -550,12 +550,17 @@ class AddUserDialog(QDialog):
         user_login = self.login_input.text().strip()
         position_id = self.position_combo.currentData()
         user_password = DEFAULT_PASSWORD
-        # Базовая проверка: не допускаем телефон и email равными "1"
         if not (first_name and last_name and phone and email and user_login):
             self.message_label.setText("Все поля обязательны")
             return
         if phone == "1" or email == "1":
             self.message_label.setText("Недопустимое значение для телефона или email")
+            return
+        if not re.fullmatch(r"[A-Za-zА-Яа-яЁё]+", first_name):
+            self.message_label.setText("Имя должно содержать только буквы")
+            return
+        if not re.fullmatch(r"[A-Za-zА-Яа-яЁё]+", last_name):
+            self.message_label.setText("Фамилия должна содержать только буквы")
             return
         try:
             connection = db_connect()
@@ -1197,11 +1202,9 @@ class AddBookingDialog(QDialog):
             self.message_label.setText("Стоимость должна быть числом")
             return
         room_id = self.room_combo.currentData()
-        # Проверяем доступность выбранного номера:
         try:
             connection = db_connect()
             cursor = connection.cursor()
-            # Проверка пересечения дат:
             cursor.execute("""
                 SELECT b.booking_date 
                 FROM BookingRooms br
@@ -1216,14 +1219,12 @@ class AddBookingDialog(QDialog):
                 cursor.close()
                 connection.close()
                 return
-            # Вставляем бронирование
             now = datetime.now()
             cursor.execute("""
                 INSERT INTO Bookings (client_id, booking_date, arrival_date, departure_date, booking_status_id, total_cost)
                 VALUES (%s, %s, %s, %s, %s, %s) RETURNING booking_id
             """, (client_id, now, arrival, departure, status_id, total_cost))
             booking_id = cursor.fetchone()[0]
-            # Вставляем связь с комнатой
             cursor.execute("""
                 INSERT INTO BookingRooms (booking_id, room_id)
                 VALUES (%s, %s)
@@ -1319,7 +1320,6 @@ class EditBookingDialog(QDialog):
                 if index >= 0:
                     self.status_combo.setCurrentIndex(index)
                 self.total_cost.setText(str(total_cost))
-            # Получаем текущее бронирование номера из BookingRooms
             cursor.execute("SELECT room_id FROM BookingRooms WHERE booking_id = %s", (self.booking_id,))
             room = cursor.fetchone()
             if room:
@@ -1368,7 +1368,6 @@ class EditBookingDialog(QDialog):
                 UPDATE Bookings SET client_id = %s, arrival_date = %s, departure_date = %s, booking_status_id = %s, total_cost = %s
                 WHERE booking_id = %s
             """, (client_id, arrival, departure, status_id, total_cost, self.booking_id))
-            # Обновляем связь с номером
             cursor.execute("DELETE FROM BookingRooms WHERE booking_id = %s", (self.booking_id,))
             cursor.execute("INSERT INTO BookingRooms (booking_id, room_id) VALUES (%s, %s)", (self.booking_id, room_id))
             connection.commit()
